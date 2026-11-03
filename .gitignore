@@ -1,0 +1,16 @@
+.env
+.venv/
+__pycache__/
+runs/
+.DS_Store
+# LangGraph checkpoint files (not used by this project, excluded in case)
+checkpoints/
+.langgraph_api/
+*.sqlite
+*.sqlite3
+*.db
+*.db-wal
+*.db-shm
+*.ckpt
+# Generated per instance by verify_instance.py (contains the instance URL)
+config/instance.json
