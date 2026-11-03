@@ -292,7 +292,7 @@ def analyse(ev, engine):
     if engine == "llm":
         try:
             r = with_llm(ev, method)
-            r["engine"] = f"llm {llm.model()}"
+            r["engine"] = f"llm {llm.describe()}"
         except llm.LLMUnavailable as e:
             print(f"{LOG} LLM unavailable for {ev['problem']['number']} ({e}); using deterministic fallback")
             r = fallback(ev, method)
@@ -412,7 +412,7 @@ def run(context):
     engine = context.get("engine") or ("llm" if llm.available() else "fallback")
     svc = SNClient(dry_run=dry)
     print(f"{LOG} run {context['run_id']} as {svc.session.auth[0]} dry_run={dry} engine={engine}"
-          f"{' ' + llm.model() if engine == 'llm' else ''}")
+          f"{' ' + llm.describe() if engine == 'llm' else ''}")
     open_states = {config.choice_value("problem.state", s) for s in ("New", "Root Cause Analysis")}
     all_incidents, cis = load_world(svc, tag)
     problems = svc.get_all("problem", f"correlation_id={tag}", fields=["sys_id", "number", "short_description", "cmdb_ci", "state"])
