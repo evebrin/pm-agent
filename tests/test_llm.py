@@ -52,10 +52,11 @@ class TestProviders(unittest.TestCase):
         self.assertEqual(r, {"ok": 1})
         self.assertEqual(post.call_args.kwargs["json"]["model"], "old-m")
 
-    def test_openai_gemini_ollama_compatible(self, sleep):
+    def test_openai_style_providers(self, sleep):
         cases = {
             "openai": ({"LLM_API_KEY": SECRET}, "https://api.openai.com/v1/chat/completions"),
             "gemini": ({"LLM_API_KEY": SECRET}, "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"),
+            "xai": ({"LLM_API_KEY": SECRET}, "https://api.x.ai/v1/chat/completions"),
             "ollama": ({}, "http://localhost:11434/v1/chat/completions"),
             "openai_compatible": ({"LLM_API_KEY": SECRET, "LLM_BASE_URL": "https://example.test/v1/"},
                                   "https://example.test/v1/chat/completions"),

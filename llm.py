@@ -1,8 +1,8 @@
 """One small LLM wrapper for any provider named in .env. Every caller must have a deterministic
 fallback: any failure (nothing configured, API error, reply not JSON) raises LLMUnavailable.
 
-    LLM_PROVIDER   anthropic | openai | gemini | ollama | openai_compatible   (default anthropic)
-    LLM_MODEL      model name, e.g. claude-sonnet-4-6, gpt-4.1, gemini-2.5-flash, llama3.1
+    LLM_PROVIDER   anthropic | openai | gemini | xai | ollama | openai_compatible   (default anthropic)
+    LLM_MODEL      model name, e.g. claude-sonnet-4-6, gpt-4.1, gemini-2.5-flash, grok-build-0.1, llama3.1
     LLM_API_KEY    not needed for ollama (or a keyless openai_compatible server)
     LLM_BASE_URL   required for openai_compatible; optional override for the others
 
@@ -28,6 +28,7 @@ PROVIDERS = {
     "anthropic": ("anthropic", "https://api.anthropic.com/v1"),
     "openai": ("openai", "https://api.openai.com/v1"),
     "gemini": ("openai", "https://generativelanguage.googleapis.com/v1beta/openai"),
+    "xai": ("openai", "https://api.x.ai/v1"),  # Grok models, including Grok Build (grok-build-0.1)
     "ollama": ("openai", "http://localhost:11434/v1"),
     "openai_compatible": ("openai", None),
 }
