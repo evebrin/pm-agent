@@ -15,6 +15,7 @@ Agents call move(svc, problem, label, fields).
 import argparse
 import json
 import sys
+import time
 
 import config
 from sn_client import SNClient, SNError
@@ -74,6 +75,34 @@ SCRIPT = """(function process(request, response) {
 })(request, response);""" % (json.dumps(FIELDS), config.TAG_PREFIX, config.TAG_PREFIX)
 
 
+# Knowledge articles publish the same way (phase 5): setting workflow_state through the Table API is
+# ignored; the Publish button calls KnowledgeUIAction().publish(), which runs the KB's publish flow.
+PUBLISH_SCRIPT = """(function process(request, response) {
+    var body = request.body.data || {};
+    var gr = new GlideRecord('kb_knowledge');
+    if (!body.sys_id || !gr.get(body.sys_id)) {
+        response.setStatus(404);
+        return {ok: false, error: 'article not found'};
+    }
+    if ((gr.getValue('short_description') || '').indexOf('[%s]') !== 0) {
+        response.setStatus(403);
+        return {ok: false, error: 'only [%s]-tagged articles can be published by this API'};
+    }
+    if (gr.getValue('workflow_state') === 'published')
+        return {ok: true, workflow_state: 'published', already: true};
+    if (!new KBKnowledge().canPublish(gr)) {
+        response.setStatus(409);
+        return {ok: false, workflow_state: gr.getValue('workflow_state'), error: 'canPublish() is false for this user and article'};
+    }
+    new global.KnowledgeUIAction().publish(gr);
+    var after = new GlideRecord('kb_knowledge');
+    after.get(gr.getUniqueValue());
+    return {ok: true, workflow_state: after.getValue('workflow_state')};
+})(request, response);""" % (config.TAG_PREFIX, config.TAG_PREFIX)
+OPERATIONS = [("move", "/move", SCRIPT, "move one problem one state"),
+              ("publish_article", "/publish_article", PUBLISH_SCRIPT, "publish one knowledge article")]
+
+
 def _admin():
     return SNClient(user_var="SN_ADMIN_USER", password_var="SN_ADMIN_PASSWORD")
 
@@ -85,13 +114,15 @@ def install():
             "short_description": f"{config.TAG_PREFIX} project: moves tagged problems between states server-side"}
     d = a.update("sys_ws_definition", d[0]["sys_id"], data) if d else a.create("sys_ws_definition", data)
     base = a.get("sys_ws_definition", f"sys_id={d['sys_id']}", fields=["base_uri"])[0]["base_uri"]
-    op = {"web_service_definition": d["sys_id"], "name": "move", "http_method": "POST", "relative_path": "/move",
-          "operation_script": SCRIPT, "active": "true", "requires_authentication": "true",
-          "short_description": f"{config.TAG_PREFIX}: move one problem one state"}
-    have = a.get("sys_ws_operation", f"web_service_definition={d['sys_id']}^name=move", fields=["sys_id"])
-    a.update("sys_ws_operation", have[0]["sys_id"], op) if have else a.create("sys_ws_operation", op)
+    for name, path, script, desc in OPERATIONS:
+        op = {"web_service_definition": d["sys_id"], "name": name, "http_method": "POST", "relative_path": path,
+              "operation_script": script, "active": "true", "requires_authentication": "true",
+              "short_description": f"{config.TAG_PREFIX}: {desc}"}
+        have = a.get("sys_ws_operation", f"web_service_definition={d['sys_id']}^name={name}", fields=["sys_id"])
+        a.update("sys_ws_operation", have[0]["sys_id"], op) if have else a.create("sys_ws_operation", op)
+        print(f"installed {NAME}: POST {base}{path}")
     API_FILE.write_text(json.dumps({"base_uri": base}, indent=2))
-    print(f"installed {NAME}: POST {base}/move  (saved to config/state_api.json)")
+    print("saved to config/state_api.json")
 
 
 def remove(sn=None, apply=True):
@@ -108,10 +139,10 @@ def remove(sn=None, apply=True):
     return len(ops) + len(defs)
 
 
-def _path():
+def _path(op="/move"):
     if not API_FILE.exists():
         raise SNError("state API not installed: run `python state_api.py --install` (as admin) first")
-    return json.loads(API_FILE.read_text())["base_uri"] + "/move"
+    return json.loads(API_FILE.read_text())["base_uri"] + op
 
 
 def call(svc, sys_id, state, fields=None, check_only=False):
@@ -128,6 +159,35 @@ def call(svc, sys_id, state, fields=None, check_only=False):
             except (ValueError, KeyError, TypeError):
                 pass
         raise
+
+
+def _post(svc, op, body):
+    try:
+        return svc._request("POST", _path(op), json=body)["result"]
+    except SNError as e:
+        text = str(e)
+        start = text.find("{")
+        if start >= 0:
+            try:
+                raise SNError(json.loads(text[start:])["result"]["error"]) from None
+            except (ValueError, KeyError, TypeError):
+                pass
+        raise
+
+
+def publish(svc, sys_id, number, wait=20):
+    """Publish one tagged knowledge article; the publish flow may finish a few seconds later, so poll."""
+    if svc.dry_run:
+        print(f"[dry-run] PUBLISH article {number}")
+        return True
+    r = _post(svc, "/publish_article", {"sys_id": sys_id})
+    state = r.get("workflow_state")
+    for _ in range(wait):
+        if state == "published":
+            return True
+        time.sleep(1)
+        state = svc.get("kb_knowledge", f"sys_id={sys_id}", fields=["workflow_state"])[0]["workflow_state"]
+    return state == "published"
 
 
 def move(svc, p, label, fields=None):

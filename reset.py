@@ -15,11 +15,15 @@ from sn_client import SNClient, SNError
 
 P = config.TAG_PREFIX
 # (table, tag query), in safe deletion order
+KB_TAG = f"short_descriptionSTARTSWITH[{P}]"
 TAGGED = [
+    # side records the platform creates for our knowledge articles (phase 5), before the articles
+    ("m2m_kb_task", f"kb_knowledge.{KB_TAG}"),
+    ("kb_version", f"knowledge.{KB_TAG}"),
     ("incident", f"correlation_idSTARTSWITH{P}-"),
     ("change_request", f"correlation_idSTARTSWITH{P}-"),
     ("problem", f"correlation_idSTARTSWITH{P}-"),
-    ("kb_knowledge", f"short_descriptionSTARTSWITH[{P}]"),
+    ("kb_knowledge", KB_TAG),
     ("cmdb_ci", f"correlation_idSTARTSWITH{P}-"),
     ("sys_user_grmember", f"group.nameSTARTSWITH[{P}] "),
     ("sys_user_group", f"nameSTARTSWITH[{P}] "),
@@ -39,7 +43,14 @@ def main():
     try:
         sn = SNClient(user_var="SN_ADMIN_USER", password_var="SN_ADMIN_PASSWORD")
         before = untagged(sn)
-        total = 0
+        # Knowledge Summary rows only carry the article number, so they are found through our articles
+        numbers = [r["number"] for r in sn.get_all("kb_knowledge", KB_TAG, fields=["number"])]
+        summaries = sn.get_all("kb_knowledge_summary", f"numberIN{','.join(numbers)}", fields=["sys_id"]) if numbers else []
+        print(f"{'DELETING' if args.apply else 'would delete'} {len(summaries):4}  kb_knowledge_summary")
+        if args.apply:
+            for r in summaries:
+                sn.delete("kb_knowledge_summary", r["sys_id"])
+        total = len(summaries)
         for table, q in TAGGED:
             rows = sn.get_all(table, q, fields=["sys_id"])
             total += len(rows)
