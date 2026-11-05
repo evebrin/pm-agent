@@ -16,7 +16,7 @@ from pathlib import Path
 from sn_client import SNClient, SNError
 
 USER_NAME = "pm_agent_svc"
-ROLES = ["itil", "itil_admin", "user_admin"]
+ROLES = ["itil", "itil_admin", "user_admin", "problem_coordinator"]  # problem_coordinator: problem state changes (phase 4)
 ENV_PATH = Path(__file__).parent / ".env"
 DISPLAY = {"sysparm_input_display_value": "true"}
 

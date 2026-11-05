@@ -5,7 +5,7 @@ linked incidents and their work notes, CI attributes, same-class CIs for compari
 time and close-code profiles. It then runs 5 Whys, or Kepler-Tregoe "is / is not" when the evidence
 is ambiguous, through the LLM (llm.py) with a deterministic rule-based fallback. A human accepts,
 edits, sends back or rejects each RCA. Accepted RCAs fill cause_notes and workaround and move the
-problem New -> Root Cause Analysis -> Fix in Progress.
+problem New -> Assess -> Root Cause Analysis (Fix in Progress follows in phase 6, with the fix notes).
 
 Runs as pm_agent_svc. The answer key is read only by evaluation, never by the analysis.
 
@@ -23,6 +23,7 @@ from datetime import datetime, timedelta, timezone
 
 import config
 import llm
+import state_api
 from detection_agent import tokens
 from sn_client import SNClient, SNError
 
@@ -352,18 +353,40 @@ def gate(num, title, r, auto, ask=input):
 
 
 # --- writes ---------------------------------------------------------------------------------------
-def _move(svc, sys_id, label, data):
-    """Set a problem state (with data) and confirm it stuck; go through Assess if a direct jump is refused."""
-    want = config.choice_value("problem.state", label)
-    got = svc.update("problem", sys_id, {**data, "state": want}).get("state")
-    if svc.dry_run or got == want:
-        return [label]
-    assess = config.choice_value("problem.state", "Assess")
-    svc.update("problem", sys_id, {"state": assess})
-    got = svc.update("problem", sys_id, {"state": want}).get("state")
-    if got != want:
-        raise SNError(f"problem {sys_id} refused state {label} ({want}); state is {got}")
-    return ["Assess", label]
+# This PDI's "General" problem state model (read in phase 4): New -> Assess needs Assigned to;
+# Assess -> Root Cause Analysis has no condition; New -> Root Cause Analysis is not allowed. Fix in Progress
+# needs cause AND fix notes, so it is left to phase 6, when the fix is planned (decision A).
+# problem.state is read-only to the Table API here, so moves go through state_api (server-side, model enforced).
+PATH = ["New", "Assess", "Root Cause Analysis"]
+
+
+def assignee(svc, group):
+    """First member (by user name) of the problem's assignment group: one of this project's own users."""
+    members = svc.get_all("sys_user_grmember", f"group={group}^ORDERBYuser.user_name", fields=["user"])
+    return members[0]["user"] if members else ""
+
+
+def advance(svc, p, target, data):
+    """Step the problem along PATH to `target`, one transition per call to the state API.
+    `data` is written with the final step. Returns the states passed through."""
+    labels = {config.choice_value("problem.state", l): l for l in PATH}
+    here = labels.get(p["state"])
+    if here is None:
+        raise SNError(f"{p['number']} is in state {p['state']}, outside {PATH}")
+    steps = PATH[PATH.index(here) + 1:PATH.index(target) + 1]
+    if not steps:  # already there: just write the data (these fields are writable through the Table API)
+        svc.update("problem", p["sys_id"], data)
+        return []
+    for i, label in enumerate(steps):
+        fields = dict(data) if i == len(steps) - 1 else {}
+        if label == "Assess" and not p.get("assigned_to"):
+            p["assigned_to"] = assignee(svc, p["assignment_group"]) or ("DRYRUN" if svc.dry_run else "")
+            if not p["assigned_to"]:
+                raise SNError(f"{p['number']}: assignment group has no members to assign the problem to")
+        if label == "Assess":
+            fields["assigned_to"] = p["assigned_to"]
+        state_api.move(svc, p, label, fields)
+    return steps
 
 
 def analysis_note(r):
@@ -376,22 +399,23 @@ def analysis_note(r):
     return "\n".join(lines)
 
 
-def apply(svc, sys_id, r, e):
+def apply(svc, p, r, e):
     gate_note = (f"Human Gate 2: {e['decision'].replace('_', ' ')} by {e['by']} at {e['at']}"
                  f"{' (auto-approve rehearsal)' if e['auto'] else ''}. Engine {r['engine']}, confidence {r['confidence']}."
                  + (f" Reason: {e['reason']}" if e.get("reason") else "")
                  + (f" Changes: {json.dumps(e['changes'])}" if e["changes"] else ""))
+    note = analysis_note(r) + "\n\n" + gate_note
     if e["decision"] == "accept":
-        path = _move(svc, sys_id, "Root Cause Analysis", {"work_notes": analysis_note(r)})
-        path += _move(svc, sys_id, "Fix in Progress", {
+        path = advance(svc, p, "Root Cause Analysis", {
             "cause_notes": f"{r['root_cause']}\n\nMethod: {r['method']} (engine: {r['engine']}). Confidence: {r['confidence']}.",
-            "workaround": r["workaround"], "work_notes": gate_note})
+            "workaround": r["workaround"], "work_notes": note})
     elif e["decision"] == "send_back":
-        path = _move(svc, sys_id, "Root Cause Analysis", {"work_notes": analysis_note(r) + "\n\n" + gate_note})
+        path = advance(svc, p, "Root Cause Analysis", {"work_notes": note})
     else:
-        svc.update("problem", sys_id, {"work_notes": analysis_note(r) + "\n\n" + gate_note})
+        svc.update("problem", p["sys_id"], {"work_notes": note})
         path = []
     e["states"] = path
+    e["assigned_to"] = p.get("assigned_to", "")
     return path
 
 
@@ -407,29 +431,36 @@ def load_world(svc, tag):
     return all_incidents, cis
 
 
+TRANSIENT = ("dry_run", "auto_approve", "engine", "problems", "ask")
+
+
 def run(context):
     dry, tag = context.get("dry_run", False), context["tag"]
     engine = context.get("engine") or ("llm" if llm.available() else "fallback")
     svc = SNClient(dry_run=dry)
     print(f"{LOG} run {context['run_id']} as {svc.session.auth[0]} dry_run={dry} engine={engine}"
           f"{' ' + llm.describe() if engine == 'llm' else ''}")
-    open_states = {config.choice_value("problem.state", s) for s in ("New", "Root Cause Analysis")}
+    open_states = {config.choice_value("problem.state", s) for s in PATH}
+    rca_state = config.choice_value("problem.state", "Root Cause Analysis")
     all_incidents, cis = load_world(svc, tag)
-    problems = svc.get_all("problem", f"correlation_id={tag}", fields=["sys_id", "number", "short_description", "cmdb_ci", "state"])
+    problems = svc.get_all("problem", f"correlation_id={tag}", fields=["sys_id", "number", "short_description", "cmdb_ci",
+                                                                        "state", "assigned_to", "assignment_group", "cause_notes"])
     only = set(context.get("problems") or [])
-    todo = sorted((p for p in problems if p["state"] in open_states and (not only or p["number"] in only)),
-                  key=lambda p: p["number"])
-    print(f"{LOG} {len(todo)} problems to analyse (state New or Root Cause Analysis)")
+    # done = accepted (Root Cause Analysis with cause notes); New, Assess (an interrupted run) and sent-back are (re)analysed
+    todo = sorted((p for p in problems if p["state"] in open_states and not (p["state"] == rca_state and p["cause_notes"].strip())
+                   and (not only or p["number"] in only)), key=lambda p: p["number"])
+    print(f"{LOG} {len(todo)} problems to analyse (New, Assess, or sent back to Root Cause Analysis)")
     results = context.setdefault("rca", {}).setdefault("results", {}) if not dry else {}
     for p in todo:
         ev = gather(svc, p, tag, all_incidents, cis)
         r = analyse(ev, engine)
         e = gate(p["number"], p["short_description"], r, context.get("auto_approve", False), context.get("ask", input))
-        path = apply(svc, p["sys_id"], r, e)
+        path = apply(svc, p, r, e)
         print(f"{LOG} {p['number']}: {e['decision']}{' -> ' + ' -> '.join(path) if path else ''}")
         if not dry:
             context.setdefault("log", []).append(e)
             results[p["number"]] = {**r, "decision": e["decision"], "at": e["at"]}
+            config.save_context({k: v for k, v in context.items() if k not in TRANSIENT})  # keep decisions if a later one fails
     return results
 
 
@@ -483,7 +514,7 @@ def check(context):
     st = {s: config.choice_value("problem.state", s) for s in ("Root Cause Analysis", "Fix in Progress")}
     print(f"{LOG} CHECK (recomputed from the PDI)")
     problems = admin.get_all("problem", f"correlation_id={context['tag']}",
-                             fields=["sys_id", "number", "state", "cause_notes", "workaround"])
+                             fields=["sys_id", "number", "state", "cause_notes", "workaround", "assigned_to"])
     matched = 0
     for p in sorted(problems, key=lambda p: p["number"]):
         r = results.get(p["number"])
@@ -495,9 +526,10 @@ def check(context):
         gate_note = any("Human Gate 2" in n["value"] for n in notes)
         ev_ok = len(r["evidence"]) >= MIN_EVIDENCE and set(r["evidence"]) <= linked
         if r["decision"] == "accept":
-            good = p["state"] == st["Fix in Progress"] and bool(p["cause_notes"].strip()) and bool(p["workaround"].strip())
+            good = (p["state"] == st["Root Cause Analysis"] and bool(p["assigned_to"]) and bool(p["cause_notes"].strip())
+                    and bool(p["workaround"].strip()))
         elif r["decision"] == "send_back":
-            good = p["state"] == st["Root Cause Analysis"]
+            good = p["state"] == st["Root Cause Analysis"] and not p["cause_notes"].strip()
         else:
             good = True
         good = good and gate_note and ev_ok
@@ -540,7 +572,7 @@ def main():
         ctx.update(dry_run=args.dry_run, auto_approve=args.auto_approve, engine=args.engine, problems=args.problem)
         run(ctx)
         if not args.dry_run:
-            for k in ("dry_run", "auto_approve", "engine", "problems"):
+            for k in TRANSIENT:
                 ctx.pop(k, None)
             config.save_context(ctx)
             print(f"{LOG} context saved to runs/{ctx['run_id']}.json")

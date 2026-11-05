@@ -14,3 +14,4 @@ checkpoints/
 *.ckpt
 # Generated per instance by verify_instance.py (contains the instance URL)
 config/instance.json
+config/state_api.json

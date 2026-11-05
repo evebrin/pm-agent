@@ -10,6 +10,7 @@ import argparse
 import sys
 
 import config
+import state_api
 from sn_client import SNClient, SNError
 
 P = config.TAG_PREFIX
@@ -46,11 +47,15 @@ def main():
             if args.apply:
                 for r in rows:
                     sn.delete(table, r["sys_id"])
+        api = state_api.remove(sn, apply=args.apply)
+        total += api
+        print(f"{'DELETING' if args.apply else 'would delete'} {api:4}  {state_api.NAME} (Scripted REST definition + operations)")
         if not args.apply:
             print(f"Dry run: {total} tagged records. Rerun with --apply to delete them.")
             return
         left = {t: sn.count(t, q) for t, q in TAGGED}
         after = untagged(sn)
+        left["state_api"] = state_api.remove(sn, apply=False)
         ok = not any(left.values()) and before == after
         print(f"tagged records left: {sum(left.values())} | untagged counts unchanged: {before == after}")
         if before != after:
