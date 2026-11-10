@@ -15,7 +15,8 @@ REQUIRED_TABLES = ["incident", "problem", "change_request", "kb_knowledge", "sys
 CMDB_TABLES = ["cmdb_ci", "cmdb_ci_server", "cmdb_ci_appl", "cmdb_ci_database", "cmdb_ci_netgear"]
 CHOICE_FIELDS = [("problem", "state"), ("incident", "state"), ("change_request", "state"),
                  ("problem", "resolution_code"), ("incident", "category"), ("incident", "subcategory"),
-                 ("incident", "close_code")]
+                 ("incident", "close_code"), ("change_request", "risk"), ("change_request", "type"),
+                 ("change_request", "close_code"), ("change_request", "impact"), ("change_task", "state")]
 # Fields later phases depend on: (table that defines it, field). Inherited task fields live on "task".
 FIELDS = [("task", "correlation_id"), ("task", "work_notes"), ("task", "close_notes"),
           ("task", "parent"), ("problem", "known_error"), ("problem", "cause_notes"),

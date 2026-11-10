@@ -311,6 +311,82 @@ def run(context):
     return result
 
 
+# --- post-change verification window (phase 6) ----------------------------------------------
+def _window_plan(rng, start, end, continued):
+    """Noise at the seeding rate, plus the planted patterns whose fix was not implemented (they keep occurring)."""
+    days = (end - start).total_seconds() / 86400
+    plan = []
+
+    def at(day, hour_lo=14, hour_hi=22):
+        return (day.replace(hour=0, minute=0, second=0, microsecond=0)
+                + timedelta(hours=rng.randint(hour_lo, hour_hi - 1), minutes=rng.randint(0, 59)))
+
+    def add(pattern, when, **fields):
+        if start <= when < end:
+            plan.append({"pattern": pattern, "opened": when, **fields})
+
+    for _ in range(round(NOISE_COUNT * days / DAYS)):
+        add("noise", at(start + timedelta(days=rng.uniform(0, days))), noise=rng.randrange(len(NOISE)))
+    d = start
+    while d < end:
+        if "b" in continued and d.weekday() == 0:
+            for _ in range(rng.randint(2, 3)):
+                add("b", at(d, 13, 17))
+        if "a" in continued and (d - start).days % 9 in (2, 3):
+            add("a", at(d))
+        if "c" in continued and rng.random() < 0.35:
+            add("c", at(d))
+        d += timedelta(days=1)
+    if "d" in continued:
+        for day in _last_business_days(start, end):
+            for _ in range(7):
+                add("d", day.replace(hour=22, minute=0, second=0, microsecond=0) + timedelta(minutes=rng.randint(0, 110)))
+    return sorted(plan, key=lambda p: p["opened"])
+
+
+def post_change(context, start, end, fixed_incident_sets, dry=False):
+    """Seed tagged incidents opened in [start, end) (simulated dates after the changes).
+    `fixed_incident_sets`: for each problem whose permanent fix was implemented, its linked incident numbers.
+    The simulator (which owns the answer key) stops the planted patterns those problems cover; others continue."""
+    key = json.loads((config.RUNS_DIR / f"{context['run_id']}_answer_key.json").read_text())["patterns"]
+    fixed = {pid for pid, p in key.items() if p["expect_problem"]
+             and any(len(set(p["incidents"]) & set(s)) * 2 >= len(p["incidents"]) for s in fixed_incident_sets)}
+    tag = context["tag"]
+    sn = SNClient(dry_run=dry, user_var="SN_ADMIN_USER", password_var="SN_ADMIN_PASSWORD")
+    if context.get("synthetic", {}).get("post_change") and not dry:
+        raise SystemExit(f"{LOG} the post-change window already exists for this run")
+    partial = sn.count("incident", f"correlation_id={tag}^opened_at>={start.strftime(FMT)}")
+    if partial and not dry:
+        raise SystemExit(f"{LOG} {partial} tagged incidents already exist after {start:%Y-%m-%d %H:%M} (an interrupted "
+                         "window?); delete those incidents before seeding the window again")
+    ref = {"group": {}, "members": {g: [] for g in GROUPS}, "callers": [], "ci": {}}
+    for g in sn.get_all("sys_user_group", f"nameSTARTSWITH[{config.TAG_PREFIX}] ", fields=["sys_id", "name"]):
+        ref["group"][g["name"].split("] ", 1)[1]] = g["sys_id"]
+    for m in sn.get_all("sys_user_grmember", f"group.nameSTARTSWITH[{config.TAG_PREFIX}] ", fields=["group", "user"]):
+        name = next(k for k, v in ref["group"].items() if v == m["group"])
+        ref["members"][name].append(m["user"])
+    ref["callers"] = [u["sys_id"] for u in sn.get_all("sys_user", "user_nameSTARTSWITHpmsynth.", fields=["sys_id"])]
+    by_name = {c[2]: c[0] for c in CIS}
+    for c in sn.get_all("cmdb_ci", f"correlation_id={tag}", fields=["sys_id", "name"]):
+        ref["ci"][by_name[c["name"]]] = c["sys_id"]
+    continued = sorted(set(PATTERNS) - set(fixed))
+    rng = random.Random(context["seed"] + 1)
+    plan = _window_plan(rng, start, end, continued)
+    print(f"{LOG} post-change window {start:%Y-%m-%d} to {end:%Y-%m-%d}: {len(plan)} incidents "
+          f"(fixed patterns stop: {', '.join(sorted(fixed)) or 'none'}; continuing: {', '.join(continued) or 'none'})")
+    numbers = []
+    for item in plan:
+        f = _incident_fields(rng, item, ref, end, tag)   # simulated clock: the end of the window
+        f["description"] += " (post-change verification window)"
+        numbers.append(sn.create("incident", f).get("number", "DRYRUN"))
+    result = {"start": start.isoformat(timespec="seconds"), "end": end.isoformat(timespec="seconds"),
+              "incidents": numbers, "fixed": sorted(fixed), "continued": continued,
+              "by_pattern": dict(Counter(i["pattern"] for i in plan))}
+    if not dry:
+        context.setdefault("synthetic", {})["post_change"] = result
+    return result
+
+
 def check(context):
     """Success check, recomputed from the PDI: counts match, every record tagged, patterns present."""
     sn = SNClient(user_var="SN_ADMIN_USER", password_var="SN_ADMIN_PASSWORD")
