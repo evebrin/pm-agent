@@ -400,6 +400,9 @@ def close(context):
             c["state_label"] = next(x["label"] for x in config.load_instance()["choices"]["change_request.state"] if x["value"] == c["state"])
             changes[p["number"]] = c
     implemented = {n for n, c in changes.items() if c["state"] == closed_chg and c["close_code"] == "successful"}
+    if not implemented:
+        print(f"{LOG} no implemented changes: nothing to verify or close")
+        return {}
     # the window starts after the last implementation and covers each problem's next expected occurrence
     pc = context.get("synthetic", {}).get("post_change")
     if pc:

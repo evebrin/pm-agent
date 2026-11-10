@@ -2,7 +2,7 @@
 
 For each problem from detection (state New or Root Cause Analysis) it gathers evidence from the PDI:
 linked incidents and their work notes, CI attributes, same-class CIs for comparison, changes on the CI,
-time and close-code profiles. It then runs 5 Whys, or Kepler-Tregoe "is / is not" when the evidence
+time and close-code profiles. It then runs 5 Whys, or Kepner-Tregoe "is / is not" when the evidence
 is ambiguous, through the LLM (llm.py) with a deterministic rule-based fallback. A human accepts,
 edits, sends back or rejects each RCA. Accepted RCAs fill cause_notes and workaround and move the
 problem New -> Assess -> Root Cause Analysis (Fix in Progress follows in phase 6, with the fix notes).
@@ -35,7 +35,7 @@ CI_ATTRS = {"cmdb_ci_netgear": ["firmware_version"], "cmdb_ci_server": ["os_vers
 DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
 # Rule thresholds, set before seeing results (assumptions 3 and 5).
-AMBIGUOUS_CLUE_SHARE = 0.40   # Kepler-Tregoe when no single clue term is in at least this share of notes
+AMBIGUOUS_CLUE_SHARE = 0.40   # Kepner-Tregoe when no single clue term is in at least this share of notes
 TIME_PATTERN_SHARE = 0.70     # a weekday or month-end pattern needs this share of incidents
 HIGH_CLUE_SHARE = 0.50        # High confidence needs one clue term in more than this share
 MIN_EVIDENCE = 3              # High confidence needs at least this many valid incident numbers cited
@@ -149,7 +149,7 @@ def clue_share(ev):
 
 
 def choose_method(ev):
-    """Assumption 3: Kepler-Tregoe when the evidence is ambiguous, else 5 Whys."""
+    """Assumption 3: Kepner-Tregoe when the evidence is ambiguous, else 5 Whys."""
     cis = {i["cmdb_ci"] for i in ev["incidents"]}
     subcats = {i["subcategory"] for i in ev["incidents"]}
     term, share = clue_share(ev)
@@ -160,7 +160,7 @@ def choose_method(ev):
         reasons.append(f"incidents span {len(subcats)} subcategories ({', '.join(sorted(subcats))})")
     if share < AMBIGUOUS_CLUE_SHARE:
         reasons.append(f"no clue term in >= {AMBIGUOUS_CLUE_SHARE:.0%} of notes (best '{term}' {share:.0%})")
-    return ("Kepler-Tregoe" if reasons else "5 Whys"), (
+    return ("Kepner-Tregoe" if reasons else "5 Whys"), (
         "; ".join(reasons) if reasons else f"single CI and subcategory, clue '{term}' in {share:.0%} of notes")
 
 
@@ -200,7 +200,7 @@ def fallback(ev, method):
     term, share = clue_share(ev)
     named_ci = any(ci["name"] in t or any(str(v) in t for k, v in ci.items() if k not in ("name", "class") and v)
                    for t in causes)
-    # CI pattern (the Kepler-Tregoe contrast): one CI, and a same-class CI with incidents in this category has none linked
+    # CI pattern (the Kepner-Tregoe contrast): one CI, and a same-class CI with incidents in this category has none linked
     contrast = [s["name"] for s in ev["same_class_cis"] if s["incidents_same_category"] and not s["linked_to_this_problem"]]
     one_ci = len({i["cmdb_ci"] for i in incs}) == 1
     consistent = bool(pattern) or named_ci or (one_ci and bool(contrast))
@@ -226,7 +226,7 @@ def fallback(ev, method):
     whys.append(f"Root cause: {root}")
 
     kt = None
-    if method == "Kepler-Tregoe":
+    if method == "Kepner-Tregoe":
         subcats = Counter(i["subcategory"] for i in incs)
         def label(s):
             a = ", ".join(f"{k} {v}" for k, v in s.items() if k not in ("name", "incidents_same_category", "linked_to_this_problem"))
@@ -247,9 +247,9 @@ def fallback(ev, method):
 # --- LLM -----------------------------------------------------------------------------------------
 SYSTEM = ("You are an ITIL 4 problem analyst doing root cause analysis on ServiceNow data. Use only the evidence "
           "given; do not invent facts. Cite incident numbers exactly as given. Answer with one JSON object only.")
-SCHEMA = """{"method": "5 Whys" or "Kepler-Tregoe",
- "whys": ["Why ...? Because ...", ...]   (3-5 steps; for Kepler-Tregoe a short reasoning chain),
- "is_is_not": null, or for Kepler-Tregoe {"what": {"is": "", "is_not": ""}, "where": {...}, "when": {...}, "extent": {...}},
+SCHEMA = """{"method": "5 Whys" or "Kepner-Tregoe",
+ "whys": ["Why ...? Because ...", ...]   (3-5 steps; for Kepner-Tregoe a short reasoning chain),
+ "is_is_not": null, or for Kepner-Tregoe {"what": {"is": "", "is_not": ""}, "where": {...}, "when": {...}, "extent": {...}},
  "root_cause": "one or two sentences naming the specific mechanism",
  "confidence": "High" | "Medium" | "Low",
  "confidence_reason": "why this confidence",
@@ -259,7 +259,7 @@ SCHEMA = """{"method": "5 Whys" or "Kepler-Tregoe",
 
 def with_llm(ev, method):
     prompt = (f"Do a root cause analysis for problem {ev['problem']['number']} using {method}"
-              f"{' (an is / is not table)' if method == 'Kepler-Tregoe' else ''}. If the evidence does not show a "
+              f"{' (an is / is not table)' if method == 'Kepner-Tregoe' else ''}. If the evidence does not show a "
               "cause, say so and use Low confidence. High confidence needs a cause supported by most incidents and "
               f"at least {MIN_EVIDENCE} cited incidents.\n\nReturn JSON in this shape:\n{SCHEMA}\n\nEvidence:\n"
               + json.dumps(_public(ev), indent=1))
@@ -512,6 +512,8 @@ def check(context):
     key, ok = _key(context), True
     results = context.get("rca", {}).get("results", {})
     st = {s: config.choice_value("problem.state", s) for s in ("Root Cause Analysis", "Fix in Progress")}
+    # an accepted RCA ends in Root Cause Analysis; later phases move it on (Fix in Progress, Resolved, Closed)
+    rca_or_later = {config.choice_value("problem.state", s) for s in ("Root Cause Analysis", "Fix in Progress", "Resolved", "Closed")}
     print(f"{LOG} CHECK (recomputed from the PDI)")
     problems = admin.get_all("problem", f"correlation_id={context['tag']}",
                              fields=["sys_id", "number", "state", "cause_notes", "workaround", "assigned_to"])
@@ -526,7 +528,7 @@ def check(context):
         gate_note = any("Human Gate 2" in n["value"] for n in notes)
         ev_ok = len(r["evidence"]) >= MIN_EVIDENCE and set(r["evidence"]) <= linked
         if r["decision"] == "accept":
-            good = (p["state"] == st["Root Cause Analysis"] and bool(p["assigned_to"]) and bool(p["cause_notes"].strip())
+            good = (p["state"] in rca_or_later and bool(p["assigned_to"]) and bool(p["cause_notes"].strip())
                     and bool(p["workaround"].strip()))
         elif r["decision"] == "send_back":
             good = p["state"] == st["Root Cause Analysis"] and not p["cause_notes"].strip()

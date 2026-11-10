@@ -326,6 +326,9 @@ def _key(context):
 
 def evaluate(context, candidates):
     """Compare candidates to the answer key (evaluation only; detection never reads it)."""
+    if not (config.RUNS_DIR / f"{context['run_id']}_answer_key.json").exists():
+        print(f"{LOG} no answer key for this run (dry run of a new run?); evaluation skipped")
+        return
     key = _key(context)
     print(f"\n{LOG} EVALUATION vs answer key (candidates)")
     for pid, p in key.items():

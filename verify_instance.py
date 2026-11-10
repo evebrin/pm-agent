@@ -133,4 +133,6 @@ def main():
 
 
 if __name__ == "__main__":
+    import argparse
+    argparse.ArgumentParser(description=__doc__.split("\n")[0], epilog="No options: running it checks the instance and writes config/instance.json.").parse_args()
     main()

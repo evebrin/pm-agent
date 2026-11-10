@@ -86,4 +86,6 @@ def main():
 
 
 if __name__ == "__main__":
+    import argparse
+    argparse.ArgumentParser(description=__doc__.split("\n")[0], epilog="No options: running it creates or refreshes pm_agent_svc and gives it a NEW password in .env.").parse_args()
     main()

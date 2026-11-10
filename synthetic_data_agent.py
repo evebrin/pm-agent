@@ -391,7 +391,8 @@ def check(context):
     """Success check, recomputed from the PDI: counts match, every record tagged, patterns present."""
     sn = SNClient(user_var="SN_ADMIN_USER", password_var="SN_ADMIN_PASSWORD")
     tag, created = context["tag"], context["synthetic"]["created"]
-    queries = {"incident": f"correlation_id={tag}", "sys_user_group": f"nameSTARTSWITH[{config.TAG_PREFIX}] ",
+    window = "post-change verification window"  # phase 6 adds these later; counted separately below
+    queries = {"incident": f"correlation_id={tag}^descriptionNOT LIKE{window}", "sys_user_group": f"nameSTARTSWITH[{config.TAG_PREFIX}] ",
                "sys_user": "user_nameSTARTSWITHpmsynth.",
                "sys_user_grmember": f"group.nameSTARTSWITH[{config.TAG_PREFIX}] "}
     ok = True
@@ -403,6 +404,12 @@ def check(context):
         ok &= good
         print(f"  {'PASS' if good else 'FAIL'}  {table:20} generated={len(ids):3}  tagged in PDI={len(found):3}"
               + ("" if good else f"  untagged={len(set(ids) - found)} extra={len(found - set(ids))}"))
+    pc = context["synthetic"].get("post_change")
+    if pc:
+        n = sn.count("incident", f"correlation_id={tag}^descriptionLIKE{window}")
+        good = n == len(pc["incidents"])
+        ok &= good
+        print(f"  {'PASS' if good else 'FAIL'}  {'post-change window':20} generated={len(pc['incidents']):3}  tagged in PDI={n:3}")
 
     key = json.loads((config.RUNS_DIR / f"{context['run_id']}_answer_key.json").read_text())["patterns"]
     rows = sn.get_all("incident", f"correlation_id={tag}", fields=["number", "opened_at", "state", "close_code"])
