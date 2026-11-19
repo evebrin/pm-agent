@@ -1,0 +1,315 @@
+{
+  "run_id": "20261119-014420",
+  "tag": "PMSYNTH-20261119-014420",
+  "incidents_total": 229,
+  "detection": {
+    "patterns": {
+      "a": {
+        "ci": "db-prod-01",
+        "planted": true,
+        "incidents": 16,
+        "problem": "PRB0040003",
+        "recall": 1.0,
+        "precision": 1.0
+      },
+      "b": {
+        "ci": "mail-01",
+        "planted": true,
+        "incidents": 23,
+        "problem": "PRB0040001",
+        "recall": 1.0,
+        "precision": 0.85
+      },
+      "c": {
+        "ci": "vpn-gw-01",
+        "planted": true,
+        "incidents": 15,
+        "problem": "PRB0040004",
+        "recall": 1.0,
+        "precision": 1.0
+      },
+      "d": {
+        "ci": "payroll-app-01",
+        "planted": true,
+        "incidents": 14,
+        "problem": "PRB0040002",
+        "recall": 1.0,
+        "precision": 1.0
+      },
+      "e": {
+        "ci": "sp-web-01",
+        "planted": false,
+        "incidents": 7,
+        "problem": null,
+        "recall": 0.0,
+        "precision": 0
+      }
+    },
+    "planted_found": 4,
+    "planted_total": 4,
+    "decoy_raised": false,
+    "unplanted_problems": [
+      "PRB0040005",
+      "PRB0040006"
+    ]
+  },
+  "rca": {
+    "matched": 4,
+    "planted_total": 4,
+    "kb_matched": 4
+  },
+  "known_errors": 6,
+  "articles": {
+    "total": 6,
+    "published": 6
+  },
+  "changes": {
+    "raised": 6,
+    "normal": 6,
+    "closed_successful": 6
+  },
+  "closure": {
+    "closed": 5,
+    "open": 1,
+    "closed_fix_applied": 5
+  },
+  "median_hours_in_state": {
+    "New": 0.0,
+    "Assess": 0.0,
+    "Root Cause Analysis": 0.3,
+    "Fix in Progress": 0.1,
+    "Resolved": 0.0
+  },
+  "observed_days_before_changes": 59.1,
+  "prevented_estimate_total": 20.0,
+  "problems": [
+    {
+      "number": "PRB0040001",
+      "title": "Recurring collaboration tools incidents on mail-01 / Email Service (outlook, email, credentials)",
+      "state": "Closed",
+      "pattern": "b",
+      "linked_incidents": 27,
+      "known_error": true,
+      "article": "KB0010001",
+      "article_state": "published",
+      "change": "CHG0030001",
+      "change_state": "Closed",
+      "change_close_code": "successful",
+      "resolution_code": "fix_applied",
+      "rca_match": true,
+      "kb_match": true,
+      "gate_decisions": [
+        "Gate 1: approved by brinleyeverson",
+        "Gate 2: accept by brinleyeverson",
+        "Gate 3: change CHG0030001 approved by brinleyeverson",
+        "Gate 4: close by brinleyeverson"
+      ],
+      "hours_in_state": {
+        "New": 0.0,
+        "Assess": 0.0,
+        "Root Cause Analysis": 0.2,
+        "Fix in Progress": 0.2,
+        "Resolved": 0.0
+      },
+      "verification": {
+        "window": "2026-11-19 to 2026-12-03",
+        "window_days": 14.4,
+        "rate_per_day_before": 0.457,
+        "expected_without_fix": 6.6,
+        "similar_in_window": 0,
+        "clean": true,
+        "prevented_estimate": 6.6
+      }
+    },
+    {
+      "number": "PRB0040002",
+      "title": "Recurring internal applications incidents on payroll-app-01 / Payroll Service (payroll, timeout, approvals)",
+      "state": "Closed",
+      "pattern": "d",
+      "linked_incidents": 14,
+      "known_error": true,
+      "article": "KB0010002",
+      "article_state": "published",
+      "change": "CHG0030002",
+      "change_state": "Closed",
+      "change_close_code": "successful",
+      "resolution_code": "fix_applied",
+      "rca_match": true,
+      "kb_match": true,
+      "gate_decisions": [
+        "Gate 1: approved by brinleyeverson",
+        "Gate 2: accept by brinleyeverson",
+        "Gate 3: change CHG0030002 approved by brinleyeverson",
+        "Gate 4: close by brinleyeverson"
+      ],
+      "hours_in_state": {
+        "New": 0.0,
+        "Assess": 0.0,
+        "Root Cause Analysis": 0.3,
+        "Fix in Progress": 0.1,
+        "Resolved": 0.0
+      },
+      "verification": {
+        "window": "2026-11-19 to 2026-12-03",
+        "window_days": 14.4,
+        "rate_per_day_before": 0.237,
+        "expected_without_fix": 3.4,
+        "similar_in_window": 0,
+        "clean": true,
+        "prevented_estimate": 3.4
+      }
+    },
+    {
+      "number": "PRB0040003",
+      "title": "Recurring database incidents on db-prod-01 (slow, database, lookups)",
+      "state": "Closed",
+      "pattern": "a",
+      "linked_incidents": 16,
+      "known_error": true,
+      "article": "KB0010003",
+      "article_state": "published",
+      "change": "CHG0030003",
+      "change_state": "Closed",
+      "change_close_code": "successful",
+      "resolution_code": "fix_applied",
+      "rca_match": true,
+      "kb_match": true,
+      "gate_decisions": [
+        "Gate 1: approved by brinleyeverson",
+        "Gate 2: accept by brinleyeverson",
+        "Gate 3: change CHG0030003 approved by brinleyeverson",
+        "Gate 4: close by brinleyeverson"
+      ],
+      "hours_in_state": {
+        "New": 0.0,
+        "Assess": 0.0,
+        "Root Cause Analysis": 0.3,
+        "Fix in Progress": 0.1,
+        "Resolved": 0.0
+      },
+      "verification": {
+        "window": "2026-11-19 to 2026-12-03",
+        "window_days": 14.4,
+        "rate_per_day_before": 0.271,
+        "expected_without_fix": 3.9,
+        "similar_in_window": 0,
+        "clean": true,
+        "prevented_estimate": 3.9
+      }
+    },
+    {
+      "number": "PRB0040004",
+      "title": "Recurring network incidents on vpn-gw-01 / VPN Service (vpn, drops, have)",
+      "state": "Closed",
+      "pattern": "c",
+      "linked_incidents": 15,
+      "known_error": true,
+      "article": "KB0010004",
+      "article_state": "published",
+      "change": "CHG0030004",
+      "change_state": "Closed",
+      "change_close_code": "successful",
+      "resolution_code": "fix_applied",
+      "rca_match": true,
+      "kb_match": true,
+      "gate_decisions": [
+        "Gate 1: approved by brinleyeverson",
+        "Gate 2: accept by brinleyeverson",
+        "Gate 3: change CHG0030004 approved by brinleyeverson",
+        "Gate 3: change CHG0030004 approved by brinleyeverson",
+        "Gate 4: close by brinleyeverson"
+      ],
+      "hours_in_state": {
+        "New": 0.0,
+        "Assess": 0.0,
+        "Root Cause Analysis": 0.3,
+        "Fix in Progress": 0.1,
+        "Resolved": 0.0
+      },
+      "verification": {
+        "window": "2026-11-19 to 2026-12-03",
+        "window_days": 14.4,
+        "rate_per_day_before": 0.254,
+        "expected_without_fix": 3.7,
+        "similar_in_window": 0,
+        "clean": true,
+        "prevented_estimate": 3.7
+      }
+    },
+    {
+      "number": "PRB0040005",
+      "title": "Recurring network incidents on core-sw-01 (wi-fi, disconnecting, floor)",
+      "state": "Closed",
+      "pattern": null,
+      "linked_incidents": 14,
+      "known_error": true,
+      "article": "KB0010005",
+      "article_state": "published",
+      "change": "CHG0030005",
+      "change_state": "Closed",
+      "change_close_code": "successful",
+      "resolution_code": "fix_applied",
+      "rca_match": null,
+      "kb_match": null,
+      "gate_decisions": [
+        "Gate 1: approved by brinleyeverson",
+        "Gate 2: accept by brinleyeverson",
+        "Gate 3: change CHG0030005 approved by brinleyeverson",
+        "Gate 4: close by brinleyeverson"
+      ],
+      "hours_in_state": {
+        "New": 0.1,
+        "Assess": 0.0,
+        "Root Cause Analysis": 0.3,
+        "Fix in Progress": 0.1,
+        "Resolved": 0.0
+      },
+      "verification": {
+        "window": "2026-11-19 to 2026-12-03",
+        "window_days": 14.4,
+        "rate_per_day_before": 0.237,
+        "expected_without_fix": 3.4,
+        "similar_in_window": 1,
+        "clean": false,
+        "prevented_estimate": 2.4
+      }
+    },
+    {
+      "number": "PRB0040006",
+      "title": "Recurring database incidents on crmdb (crmdb, connection, refused)",
+      "state": "Fix in Progress",
+      "pattern": null,
+      "linked_incidents": 9,
+      "known_error": true,
+      "article": "KB0010006",
+      "article_state": "published",
+      "change": "CHG0030006",
+      "change_state": "Closed",
+      "change_close_code": "successful",
+      "resolution_code": null,
+      "rca_match": null,
+      "kb_match": null,
+      "gate_decisions": [
+        "Gate 1: approved by brinleyeverson",
+        "Gate 2: accept by brinleyeverson",
+        "Gate 3: change CHG0030006 approved by brinleyeverson",
+        "Gate 4: keep open by brinleyeverson"
+      ],
+      "hours_in_state": {
+        "New": 0.1,
+        "Assess": 0.0,
+        "Root Cause Analysis": 0.3,
+        "Fix in Progress": 0.5
+      },
+      "verification": {
+        "window": "2026-11-19 to 2026-12-03",
+        "window_days": 14.4,
+        "rate_per_day_before": 0.152,
+        "expected_without_fix": 2.2,
+        "similar_in_window": 2,
+        "clean": false,
+        "prevented_estimate": 0.2
+      }
+    }
+  ]
+}

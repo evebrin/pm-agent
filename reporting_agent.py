@@ -256,7 +256,8 @@ def check(run_id):
         "changes raised": (saved["changes"]["raised"], sn.count("change_request", f"correlation_id={tag}")),
         "changes closed successful": (saved["changes"]["closed_successful"], sn.count(
             "change_request", f"correlation_id={tag}^state={config.choice_value('change_request.state', 'Closed')}^close_code=successful")),
-        "articles published": (saved["articles"]["published"], sn.count(
+        # as admin: the integration user may not use the stats API on kb_knowledge (403 on some PDIs)
+        "articles published": (saved["articles"]["published"], SNClient(user_var="SN_ADMIN_USER", password_var="SN_ADMIN_PASSWORD").count(
             "kb_knowledge", f"short_descriptionSTARTSWITH[{config.TAG_PREFIX}]^workflow_state=published")),
         "incidents": (saved["incidents_total"], sn.count("incident", f"correlation_id={tag}")),
     }

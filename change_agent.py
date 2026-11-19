@@ -453,7 +453,8 @@ def close(context):
         if not dry:
             context.setdefault("log", []).append(e)
             out[p["number"]] = {"decision": e["decision"], "verification": v, "at": e["at"],
-                                "incidents_resolved": e.get("incidents_resolved", [])}
+                                "incidents_resolved": e.get("incidents_resolved", []),
+                                **({"override": e["override"]} if e.get("override") else {})}
             config.save_context({k: v for k, v in context.items() if k not in TRANSIENT})
     return out
 
@@ -461,6 +462,8 @@ def close(context):
 def check_closure(context):
     admin = SNClient(user_var="SN_ADMIN_USER", password_var="SN_ADMIN_PASSWORD")
     ok, res = True, context.get("closure", {}).get("problems", {})
+    # latest Gate 4 override per problem, from the log (results saved before this fix do not carry it)
+    overrides = {e["problem"]: e.get("override") for e in context.get("log", []) if e.get("gate") == 4}
     pc = context.get("synthetic", {}).get("post_change")
     print(f"{LOG} CHECK part 2: closure (recomputed from the PDI)")
     if not pc:
@@ -481,7 +484,7 @@ def check_closure(context):
             c = admin.get(CHG, f"sys_id={p['rfc']}", fields=["number", "state", "close_code"])[0] if p["rfc"] else {}
             good = (p["state"] == cv("problem.state", "Closed") and p["resolution_code"] == cv("problem.resolution_code", "Fix Applied")
                     and p["close_notes"].strip() != "" and c.get("state") == cv("change_request.state", "Closed")
-                    and c.get("close_code") == "successful" and (v["clean"] or bool(r.get("override"))))
+                    and c.get("close_code") == "successful" and (v["clean"] or bool(r.get("override") or overrides.get(num))))
             done = {cv("incident.state", "Resolved"), cv("incident.state", "Closed")}
             for n in r.get("incidents_resolved", []):
                 good &= admin.get("incident", f"number={n}", fields=["state"])[0]["state"] in done

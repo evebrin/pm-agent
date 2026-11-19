@@ -126,7 +126,8 @@ list of fields) and `publish_article` (only `[PMSYNTH]` articles, through the pl
 - **Accepted RCA ends in Root Cause Analysis, not Fix in Progress**: the state model needs cause *and*
   fix notes for Fix in Progress, so the move happens in the change step with the fix notes.
 - **Admin exceptions** (all logged): linking *closed* incidents to problems (the integration user may not
-  write closed incidents); reading metadata (`sys_choice`, dictionary, audit history); recording the
+  write closed incidents); reading metadata (`sys_choice`, dictionary, audit history) and counting the
+  knowledge articles the project did not create (before/after check of phase 5); recording the
   Gate 3 decision on the change's ServiceNow approval records. The assignment-group approval belongs to
   our synthetic users; the CAB approval is addressed to demo users, so ServiceNow shows it as approved
   for them by admin, with a comment naming the Gate 3 approver.

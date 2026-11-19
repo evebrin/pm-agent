@@ -144,7 +144,8 @@ def run(context):
     print(f"{LOG} {len(todo)} accepted problems without a known error article")
     knowledge = context.setdefault("knowledge", {}) if not dry else {}
     if not dry and "baseline" not in knowledge:  # untagged articles, to show phase 5 touches no one else's
-        knowledge["baseline"] = untagged_articles(svc, kb)
+        # read as admin, like the check: the integration user may not count every article (403 on some PDIs)
+        knowledge["baseline"] = untagged_articles(SNClient(user_var="SN_ADMIN_USER", password_var="SN_ADMIN_PASSWORD"), kb)
     # articles we created earlier that are still draft (e.g. before the publish operation existed)
     for p in problems:
         if p["number"] not in accepted or not p["primary_known_error_article"] or (only and p["number"] not in only):
