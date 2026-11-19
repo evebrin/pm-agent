@@ -115,7 +115,9 @@ work because they run server-side. `state_api.py` installs one tagged Scripted R
 operations that do the same server-side: `move` (one problem, one state; the platform's state model and
 its conditions still apply, the caller needs `problem_coordinator`, only `PMSYNTH-` problems and a short
 list of fields) and `publish_article` (only `[PMSYNTH]` articles, through the platform's own publish).
-`reset.py` removes it.
+`reset.py` removes it. `PM_EXTRA_TAG_PREFIXES` (for example `SYN-E2E-`) lets another project's tagged problems
+and `[SYN-E2E-…]` articles through as well; each prefix must be upper case letters, digits and hyphens ending
+with `-`, because it is written into the server script. Reinstall (`--remove`, then `--install`) after changing it.
 
 ## Deviations from the spec, and why
 

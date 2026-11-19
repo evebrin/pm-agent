@@ -1,6 +1,8 @@
 """Project configuration. Instance-specific values come from config/instance.json,
 written by verify_instance.py; nothing instance-specific is hardcoded here."""
 import json
+import os
+import re
 import sys
 from pathlib import Path
 
@@ -8,6 +10,28 @@ ROOT = Path(__file__).parent
 INSTANCE_FILE = ROOT / "config" / "instance.json"
 
 TAG_PREFIX = "PMSYNTH"
+
+
+def _extra_prefixes():
+    """Other tag prefixes the state API may serve, e.g. SYN-E2E- for the combined orchestrator (owner PR P3).
+
+    From PM_EXTRA_TAG_PREFIXES (environment, else .env), comma-separated. Each is upper case letters, digits and
+    hyphens, ending with a hyphen: the values are written into the endpoint's server script, so nothing else is let in.
+    """
+    raw = os.environ.get("PM_EXTRA_TAG_PREFIXES")
+    if raw is None:
+        from dotenv import dotenv_values
+        raw = dotenv_values(Path(__file__).resolve().parent / ".env").get("PM_EXTRA_TAG_PREFIXES") or ""
+    out = tuple(p.strip() for p in raw.split(",") if p.strip())
+    bad = [p for p in out if not re.fullmatch(r"[A-Z][A-Z0-9-]*-", p)]
+    if bad:
+        raise SystemExit("PM_EXTRA_TAG_PREFIXES: each prefix must be upper case letters, digits and hyphens, ending with '-'")
+    return out
+
+
+EXTRA_TAG_PREFIXES = _extra_prefixes()
+TAG_PREFIXES = (f"{TAG_PREFIX}-", *EXTRA_TAG_PREFIXES)                         # problems the state API may move
+ARTICLE_PREFIXES = (f"[{TAG_PREFIX}]", *(f"[{p}" for p in EXTRA_TAG_PREFIXES))  # articles it may publish
 
 # This PDI's incident table has no problem_id field (verified in phase 1), so incidents are
 # linked to their problem through the task.parent reference instead.
