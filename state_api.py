@@ -37,9 +37,11 @@ SCRIPT = """(function process(request, response) {
         response.setStatus(404);
         return {ok: false, error: 'problem not found'};
     }
-    if ((gr.getValue('correlation_id') || '').indexOf('%s-') !== 0) {
+    var PREFIXES = %s, cid = gr.getValue('correlation_id') || '', tagged = false;
+    for (var p = 0; p < PREFIXES.length; p++) if (cid.indexOf(PREFIXES[p]) === 0) tagged = true;
+    if (!tagged) {
         response.setStatus(403);
-        return {ok: false, error: 'only %s-tagged problems can be moved by this API'};
+        return {ok: false, error: 'only problems tagged ' + PREFIXES.join(' or ') + ' can be moved by this API'};
     }
     if (!gs.hasRole('problem_coordinator')) {
         response.setStatus(403);
@@ -72,7 +74,7 @@ SCRIPT = """(function process(request, response) {
     response.setStatus(ok ? 200 : 409);
     return {ok: ok, from: from, to: to, state: after.getValue('state'),
             error: ok ? '' : 'update did not stick (a business rule aborted it)'};
-})(request, response);""" % (json.dumps(FIELDS), config.TAG_PREFIX, config.TAG_PREFIX)
+})(request, response);""" % (json.dumps(FIELDS), json.dumps(list(config.TAG_PREFIXES)))
 
 
 # Knowledge articles publish the same way (phase 5): setting workflow_state through the Table API is
@@ -84,9 +86,11 @@ PUBLISH_SCRIPT = """(function process(request, response) {
         response.setStatus(404);
         return {ok: false, error: 'article not found'};
     }
-    if ((gr.getValue('short_description') || '').indexOf('[%s]') !== 0) {
+    var PREFIXES = %s, title = gr.getValue('short_description') || '', tagged = false;
+    for (var p = 0; p < PREFIXES.length; p++) if (title.indexOf(PREFIXES[p]) === 0) tagged = true;
+    if (!tagged) {
         response.setStatus(403);
-        return {ok: false, error: 'only [%s]-tagged articles can be published by this API'};
+        return {ok: false, error: 'only articles titled ' + PREFIXES.join(' or ') + ' can be published by this API'};
     }
     if (gr.getValue('workflow_state') === 'published')
         return {ok: true, workflow_state: 'published', already: true};
@@ -98,7 +102,7 @@ PUBLISH_SCRIPT = """(function process(request, response) {
     var after = new GlideRecord('kb_knowledge');
     after.get(gr.getUniqueValue());
     return {ok: true, workflow_state: after.getValue('workflow_state')};
-})(request, response);""" % (config.TAG_PREFIX, config.TAG_PREFIX)
+})(request, response);""" % json.dumps(list(config.ARTICLE_PREFIXES))
 OPERATIONS = [("move", "/move", SCRIPT, "move one problem one state"),
               ("publish_article", "/publish_article", PUBLISH_SCRIPT, "publish one knowledge article")]
 
@@ -209,8 +213,12 @@ def move(svc, p, label, fields=None):
 def test():
     """Read-only checks as pm_agent_svc (check_only never writes)."""
     svc = SNClient()
-    tag = f"{config.TAG_PREFIX}-"
-    probs = svc.get_all("problem", f"correlation_idSTARTSWITH{tag}", fields=["sys_id", "number", "state"])
+    probs = [p for prefix in config.TAG_PREFIXES
+             for p in svc.get_all("problem", f"correlation_idSTARTSWITH{prefix}", fields=["sys_id", "number", "state"])]
+    if not probs:
+        print(f"no problems tagged {' or '.join(config.TAG_PREFIXES)} yet: run detection first, then --test")
+        print("RESULT: STATE API NOT TESTED")
+        return False
     st = {config.choice_value("problem.state", l): l for l in ("New", "Assess", "Root Cause Analysis")}
     ok = True
     new = next((p for p in probs if st.get(p["state"]) == "New"), None)
